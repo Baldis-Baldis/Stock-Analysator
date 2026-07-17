@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B1020">
+<title>Analyzátor akcií</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+:root{--bg:#0B1020;--panel:#141A2A;--line:#232B40;--mut:#8B93A7;--dim:#5A6278;
+--txt:#E8EAF0;--gold:#C9A227;--green:#5FE3A1;--red:#F58B85;--yellow:#F0CE5A;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:'Space Grotesk',system-ui,sans-serif;padding:0 14px 60px}
+.wrap{max-width:860px;margin:0 auto;padding-top:26px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gold);letter-spacing:.15em}
+h1{font-size:27px;margin:6px 0 14px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab{flex:1;padding:11px 8px;border-radius:10px;font-size:14px;font-weight:700;text-align:center;cursor:pointer;
+background:var(--panel);color:var(--mut);border:1px solid var(--line)}
+.tab.on{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+.sub{color:var(--mut);font-size:14px;margin:0 0 14px}
+.bar{display:flex;gap:8px;margin-bottom:16px}
+input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+color:var(--txt);font-size:16px;font-family:'IBM Plex Mono',monospace;outline:none;min-width:0}
+input::placeholder{color:var(--dim)}
+button{background:var(--gold);color:var(--bg);border:none;border-radius:10px;padding:12px 20px;
+font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+button:disabled{opacity:.5}
+.big{width:100%;padding:15px;font-size:16px}
+.err{background:#331516;border:1px solid #D2504B;border-radius:10px;padding:14px;color:var(--red);font-size:14px;margin-top:14px}
+.load{text-align:center;padding:36px 0;color:var(--mut);font-family:'IBM Plex Mono',monospace;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.row1{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rank{font-family:'IBM Plex Mono',monospace;color:var(--gold);font-weight:600}
+.tk{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600}
+.nm{font-size:14px;color:#B8BFCF}
+.mets{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--mut)}
+.mets b{color:var(--green);font-weight:600}
+.mets i{color:var(--yellow);font-style:normal}
+.lnk{font-size:12px;color:var(--gold);margin-top:8px;cursor:pointer;font-family:'IBM Plex Mono',monospace}
+.head{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;margin:16px 0}
+.head .id{flex:1 1 240px}
+.tick{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--gold)}
+h2{font-size:23px;margin:2px 0 4px}
+.meta{color:var(--mut);font-size:14px}
+.price{font-family:'IBM Plex Mono',monospace;font-size:20px;margin-top:6px}
+.badge{border-radius:12px;padding:12px 20px;text-align:center}
+.badge .l{font-size:11px;color:var(--mut);letter-spacing:.1em}
+.badge .v{font-size:18px;font-weight:700;margin-top:4px}
+.gauge{margin:4px 0}
+.gl{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin-bottom:6px;letter-spacing:.05em}
+.gt{position:relative;height:10px;border-radius:6px;background:linear-gradient(90deg,#2AAE6C,#C9A227 50%,#D2504B)}
+.gp{position:absolute;top:-5px;width:18px;height:20px;border-radius:5px;background:var(--txt);border:2px solid var(--bg)}
+.gs{text-align:center;margin-top:8px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#B8BFCF}
+h3{font-size:13px;letter-spacing:.1em;color:var(--mut);margin:26px 0 10px;font-weight:500}
+h3 span{color:var(--dim)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card .l{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.card .v{font-size:23px;font-family:'IBM Plex Mono',monospace;font-weight:600;margin-top:4px}
+.card .s{font-size:11px;color:var(--mut);margin-top:2px;font-family:'IBM Plex Mono',monospace}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:13px}
+th{background:var(--panel);color:var(--mut);text-align:right;padding:10px 12px;font-weight:400}
+th:first-child,td:first-child{text-align:left}
+td{padding:10px 12px;text-align:right;border-top:1px solid var(--line)}
+tr.main td{background:#1A2033}
+tr.main td:first-child{color:var(--gold);font-weight:600}
+td .n{color:var(--dim);margin-left:8px;font-size:12px;font-family:'Space Grotesk',sans-serif}
+.sum{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:20px;font-size:15px;line-height:1.6}
+.sum b{color:var(--gold)}
+.foot{font-size:12px;color:var(--dim);margin-top:16px;line-height:1.5}
+.g{color:var(--green)}.r{color:var(--red)}.y{color:var(--yellow)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">ŽIVÁ DATA · YAHOO FINANCE</div>
+  <h1>Analyzátor akcií</h1>
+
+  <div class="tabs">
+    <div class="tab on" id="tabS" onclick="setView('screener')">TOP 10 podhodnocených</div>
+    <div class="tab" id="tabA" onclick="setView('single')">Analýza akcie</div>
+  </div>
+
+  <!-- SKENER -->
+  <div id="vScreener">
+    <p class="sub">Oficiální Yahoo screener podhodnocených akcií, seřazeno podle nejnižšího forward P/E.</p>
+    <div class="tabs">
+      <div class="tab on" id="scA" onclick="setScr('large')">Velké firmy</div>
+      <div class="tab" id="scB" onclick="setScr('growth')">Růstové</div>
+    </div>
+    <button class="big" id="btnS" onclick="runScreener()">Prohledat trh</button>
+    <div id="outS"></div>
+  </div>
+
+  <!-- JEDNA AKCIE -->
+  <div id="vSingle" style="display:none">
+    <p class="sub">První ticker = analyzovaná akcie, další oddělené čárkou = konkurence pro srovnání.</p>
+    <div class="bar">
+      <input id="inp" placeholder="AAPL, MSFT, GOOGL, META" autocapitalize="characters">
+      <button id="btnA" onclick="runStock()">Analyzovat</button>
+    </div>
+    <div id="outA"></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let scrType="large";
+const fmt=(v,s="")=>v==null||Number.isNaN(v)?"—":(typeof v==="number"?(Math.abs(v)>=100?v.toFixed(0):v.toFixed(2)):v)+s;
+const cap=v=>{if(!v)return"—";const u=[[1e12,"bil."],[1e9,"mld."],[1e6,"mil."]];for(const[l,n]of u)if(v>=l)return(v/l).toFixed(2)+" "+n;return v.toLocaleString()};
+const avg=a=>{const x=a.filter(v=>v!=null&&v>0);return x.length?x.reduce((p,c)=>p+c,0)/x.length:null};
+const cls=(v,a,low=true)=>{if(v==null||a==null)return"";const r=v/a;
+  if(low)return r<0.9?"g":r>1.15?"r":"y";return r>1.1?"g":r<0.9?"r":"y"};
+
+function setView(v){
+  $("tabS").classList.toggle("on",v==="screener");
+  $("tabA").classList.toggle("on",v==="single");
+  $("vScreener").style.display=v==="screener"?"":"none";
+  $("vSingle").style.display=v==="single"?"":"none";
+}
+function setScr(t){scrType=t;$("scA").classList.toggle("on",t==="large");$("scB").classList.toggle("on",t==="growth")}
+$("inp").addEventListener("keydown",e=>{if(e.key==="Enter")runStock()});
+
+// ── SKENER ──
+async function runScreener(){
+  $("btnS").disabled=true;
+  $("outS").innerHTML='<div class="load">Stahuji data z Yahoo screeneru…</div>';
+  try{
+    const res=await fetch("/api/screener?type="+scrType);
+    const d=await res.json();
+    if(d.error)throw new Error(d.error);
+    let rows="";
+    d.stocks.forEach((s,i)=>{
+      rows+=`<div class="item">
+        <div class="row1"><span class="rank">#${i+1}</span><span class="tk">${s.ticker}</span><span class="nm">${s.name}</span></div>
+        <div class="mets">
+          <span style="color:var(--txt)">${fmt(s.price)} ${s.currency}</span>
+          <span>P/E <b>${fmt(s.pe)}</b></span>
+          <span>Fwd <b>${fmt(s.fwdPe)}</b></span>
+          <span>P/B <b>${fmt(s.pb)}</b></span>
+          ${s.divYield!=null?`<span>Div <i>${fmt(s.divYield)} %</i></span>`:""}
+          <span>Kap. ${cap(s.marketCap)}</span>
+        </div>
+        <div class="lnk" onclick="detail('${s.ticker}')">→ detailní analýza ${s.ticker}</div>
+      </div>`;
+    });
+    $("outS").innerHTML=`<div class="foot" style="margin:14px 0 10px">${d.title} · zdroj: ${d.source}</div>${rows}
+    <p class="foot">Pozor: nízká valuace může odrážet reálné problémy firmy (value trap) — ber seznam jako startovní bod pro vlastní průzkum, ne nákupní seznam. Informativní přehled, ne investiční doporučení.</p>`;
+  }catch(e){
+    $("outS").innerHTML='<div class="err">'+e.message+'</div>';
+  }finally{$("btnS").disabled=false}
+}
+function detail(tk){$("inp").value=tk;setView("single");runStock()}
+
+// ── JEDNA AKCIE ──
+async function runStock(){
+  const q=$("inp").value.trim();if(!q)return;
+  $("btnA").disabled=true;
+  $("outA").innerHTML='<div class="load">Stahuji živá data z Yahoo Finance…</div>';
+  try{
+    const res=await fetch("/api/analyze?tickers="+encodeURIComponent(q));
+    const d=await res.json();
+    if(d.error)throw new Error(d.error);
+    render(d);
+  }catch(e){
+    $("outA").innerHTML='<div class="err">'+e.message+'</div>';
+  }finally{$("btnA").disabled=false}
+}
+
+function metricCard(l,v,suf,sect){
+  const c=sect!==undefined?cls(v,sect):"";
+  return `<div class="card"><div class="l">${l}</div><div class="v ${c}">${fmt(v,suf)}</div>`+
+    (sect!==undefined?`<div class="s">konkurence: ${fmt(sect)}</div>`:"")+`</div>`;
+}
+
+function render(d){
+  const m=d.main,ps=d.peers;
+  const pa={pe:avg(ps.map(p=>p.pe)),fwdPe:avg(ps.map(p=>p.fwdPe)),peg:avg(ps.map(p=>p.peg)),
+            pb:avg(ps.map(p=>p.pb)),ps:avg(ps.map(p=>p.ps))};
+  let cheaper=0,total=0;
+  for(const k of["pe","fwdPe","peg","ps"]){if(m[k]&&pa[k]){total++;if(m[k]<pa[k])cheaper++}}
+  const score=total?Math.round(100-(cheaper/total)*100):50;
+  const verdict=total?(cheaper>=total*0.75?["PODHODNOCENÁ","#123324","#2AAE6C","var(--green)"]:
+    cheaper<=total*0.25?["NADHODNOCENÁ","#331516","#D2504B","var(--red)"]:
+    ["FÉROVÁ CENA","#2E2A14","#C9A227","var(--yellow)"]):["MÁLO DAT","#2E2A14","#C9A227","var(--yellow)"];
+
+  let sumTxt=ps.length?`Vůči zadané konkurenci je <b>${m.ticker}</b> levnější v ${cheaper} z ${total} valuačních metrik. `:"Přidej konkurenty pro srovnání (oddělené čárkou). ";
+  if(m.pe==null)sumTxt+="Firma je ztrátová (P/E chybí) — rozhoduje P/S a růst tržeb. ";
+  if(m.peg!=null)sumTxt+=m.peg<1?"PEG pod 1 naznačuje, že růst není plně zaceněn. ":m.peg>2?"PEG nad 2 znamená, že platíš hodně za očekávaný růst. ":"";
+  if(m.divYield)sumTxt+=`Dividendový výnos ${fmt(m.divYield)} %.`;
+
+  let peerRows="";
+  for(const p of ps)peerRows+=`<tr><td>${p.ticker}<span class="n">${p.name}</span></td>
+    <td>${fmt(p.pe)}</td><td>${fmt(p.fwdPe)}</td><td>${fmt(p.peg)}</td><td>${fmt(p.ps)}</td><td>${cap(p.marketCap)}</td></tr>`;
+
+  $("outA").innerHTML=`
+  <div class="head">
+    <div class="id">
+      <div class="tick">${m.ticker}</div><h2>${m.name}</h2>
+      <div class="meta">${m.sector} · kapitalizace ${cap(m.marketCap)} ${m.currency}</div>
+      <div class="price">${fmt(m.price)} ${m.currency}</div>
+    </div>
+    <div class="badge" style="background:${verdict[1]};border:1px solid ${verdict[2]}">
+      <div class="l">VS. KONKURENCE</div><div class="v" style="color:${verdict[3]}">${verdict[0]}</div>
+    </div>
+  </div>
+  ${ps.length?`<div class="gauge"><div class="gl"><span>LEVNÁ</span><span>FÉROVÁ</span><span>DRAHÁ</span></div>
+  <div class="gt"><div class="gp" style="left:calc(${score}% - 9px)"></div></div>
+  <div class="gs">skóre valuace: ${score}/100</div></div>`:""}
+  <h3>KLÍČOVÉ METRIKY <span>(barva = srovnání s konkurencí)</span></h3>
+  <div class="grid">
+    ${metricCard("P/E",m.pe,"",pa.pe)}
+    ${metricCard("Forward P/E",m.fwdPe,"",pa.fwdPe)}
+    ${metricCard("PEG",m.peg,"",pa.peg)}
+    ${metricCard("P/B",m.pb,"",pa.pb)}
+    ${metricCard("P/S",m.ps,"",pa.ps)}
+    ${metricCard("ROE",m.roe," %")}
+    ${metricCard("Čistá marže",m.netMargin," %")}
+    ${metricCard("Růst tržeb",m.revGrowth," %")}
+    ${metricCard("Dividenda",m.divYield," %")}
+    ${metricCard("Dluh/Equity",m.debtEq,"")}
+  </div>
+  ${ps.length?`<h3>SROVNÁNÍ S KONKURENCÍ</h3>
+  <div class="tblwrap"><table>
+    <tr><th>Firma</th><th>P/E</th><th>Fwd P/E</th><th>PEG</th><th>P/S</th><th>Kapitalizace</th></tr>
+    <tr class="main"><td>${m.ticker} ★</td><td>${fmt(m.pe)}</td><td>${fmt(m.fwdPe)}</td>
+    <td>${fmt(m.peg)}</td><td>${fmt(m.ps)}</td><td>${cap(m.marketCap)}</td></tr>
+    ${peerRows}
+  </table></div>`:""}
+  <div class="sum">${sumTxt}</div>
+  ${d.errors&&d.errors.length?`<div class="foot">Nepodařilo se: ${d.errors.join("; ")}</div>`:""}
+  <div class="foot">Data: Yahoo Finance, mohou mít drobné zpoždění. Informativní analýza, ne investiční doporučení.</div>`;
+}
+</script>
+</body>
+</html>
