@@ -2,7 +2,10 @@
   "name": "analyzator-akcii",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
-    "yahoo-finance2": "^2.11.3"
+    "yahoo-finance2": "4.0.0"
   }
 }
