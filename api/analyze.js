@@ -17,6 +17,7 @@ async function getMetrics(ticker) {
   const fd = q.financialData || {};
   const ap = q.assetProfile || q.summaryProfile || {};
 
+  // vezmi první ne-null hodnotu z více možných umístění
   const pick = (...vals) => {
     for (const v of vals) if (v !== null && v !== undefined && v !== "") return v;
     return null;
@@ -31,10 +32,18 @@ async function getMetrics(ticker) {
   let peg = r(pick(ks.pegRatio, ks.trailingPegRatio));
   if (peg == null && fwdPe && growth > 0) peg = r(fwdPe / (growth * 100));
 
+  const industry = pick(ap.industry, "");
+  const isReit = /reit/i.test(industry) || /REIT/i.test(pick(p.quoteType, "") || "");
+
+  const targetMean = r(pick(fd.targetMeanPrice));
+  const upside = targetMean && price ? r(((targetMean - price) / price) * 100) : null;
+
   return {
     ticker: ticker.toUpperCase(),
     name: pick(p.longName, p.shortName, ticker.toUpperCase()),
     sector: pick(ap.sector, "—"),
+    industry,
+    isReit,
     price,
     currency: pick(p.currency, fd.financialCurrency, ""),
     marketCap: pick(p.marketCap, sd.marketCap),
@@ -46,12 +55,27 @@ async function getMetrics(ticker) {
     roe: pct(pick(fd.returnOnEquity, ks.returnOnEquity)),
     netMargin: pct(pick(fd.profitMargins, ks.profitMargins)),
     revGrowth: pct(pick(fd.revenueGrowth, sd.revenueGrowth)),
+    earningsGrowth: pct(growth),
     divYield: (() => {
       const dy = pick(sd.dividendYield, sd.trailingAnnualDividendYield, ks.dividendYield);
       if (dy == null) return null;
+      // Yahoo vrací dividendYield jako desetinné číslo (0.025) i jako procenta (2.5) podle verze
       return dy > 1 ? r(dy) : pct(dy);
     })(),
     debtEq: r(pick(fd.debtToEquity, ks.debtToEquity)),
+    // nové metriky
+    evEbitda: r(pick(ks.enterpriseToEbitda, fd.enterpriseToEbitda)),
+    freeCashflow: pick(fd.freeCashflow),
+    currentRatio: r(pick(fd.currentRatio)),
+    targetMean,
+    upside,
+    recommendation: pick(fd.recommendationKey, ""),
+    payoutRatio: (() => {
+      const pr = pick(sd.payoutRatio, ks.payoutRatio);
+      if (pr == null) return null;
+      return pr > 1.5 ? r(pr) : pct(pr);
+    })(),
+    fiveYearAvgDivYield: r(pick(sd.fiveYearAvgDividendYield)),
   };
 }
 
@@ -82,6 +106,7 @@ export default async function handler(req, res) {
     }
 
     let autoPeers = false;
+    // Pokud uživatel zadal jen jeden ticker, dotáhni konkurenty ze stejného sektoru automaticky
     if (results.length === 1) {
       try {
         const rec = await yahooFinance.recommendationsBySymbol(results[0].ticker);
@@ -92,15 +117,16 @@ export default async function handler(req, res) {
         for (const sym of symbols) {
           try {
             results.push(await getMetrics(sym));
-          } catch { /* konkurenta přeskoč */ }
+          } catch { /* konkurenta prostě přeskoč */ }
         }
         if (results.length > 1) autoPeers = true;
-      } catch { /* nevadí */ }
+      } catch { /* když se nepodaří, nevadí – vrátíme aspoň hlavní akcii */ }
     }
 
     res.setHeader("Cache-Control", "s-maxage=300");
     return res.status(200).json({ main: results[0], peers: results.slice(1), errors, autoPeers });
   } catch (e) {
+    // Pojistka: i neočekávaná chyba se vrátí jako JSON, ne jako HTML error stránka
     return res.status(500).json({ error: `Serverová chyba: ${e.message || String(e)}` });
   }
 }
