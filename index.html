@@ -188,7 +188,7 @@ function render(d){
     cheaper<=total*0.25?["NADHODNOCENÁ","#331516","#D2504B","var(--red)"]:
     ["FÉROVÁ CENA","#2E2A14","#C9A227","var(--yellow)"]):["MÁLO DAT","#2E2A14","#C9A227","var(--yellow)"];
 
-  let sumTxt=ps.length?`Vůči zadané konkurenci je <b>${m.ticker}</b> levnější v ${cheaper} z ${total} valuačních metrik. `:"Přidej konkurenty pro srovnání (oddělené čárkou). ";
+  let sumTxt=ps.length?`Vůči ${d.autoPeers?"automaticky vybraným konkurentům ze stejného sektoru":"zadané konkurenci"} je <b>${m.ticker}</b> levnější v ${cheaper} z ${total} valuačních metrik. `:"Přidej konkurenty pro srovnání (oddělené čárkou). ";
   if(m.pe==null)sumTxt+="Firma je ztrátová (P/E chybí) — rozhoduje P/S a růst tržeb. ";
   if(m.peg!=null)sumTxt+=m.peg<1?"PEG pod 1 naznačuje, že růst není plně zaceněn. ":m.peg>2?"PEG nad 2 znamená, že platíš hodně za očekávaný růst. ":"";
   if(m.divYield)sumTxt+=`Dividendový výnos ${fmt(m.divYield)} %.`;
