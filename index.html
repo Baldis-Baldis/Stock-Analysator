@@ -126,13 +126,24 @@ function setScr(t){scrType=t;$("scA").classList.toggle("on",t==="large");$("scB"
 $("inp").addEventListener("keydown",e=>{if(e.key==="Enter")runStock()});
 
 // ── SKENER ──
+async function fetchJson(url) {
+  const res = await fetch(url);
+  const raw = await res.text();
+  let d;
+  try {
+    d = JSON.parse(raw);
+  } catch {
+    throw new Error(`Server vrátil neočekávanou odpověď (HTTP ${res.status}). Zkus to prosím znovu za chvíli.`);
+  }
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
 async function runScreener(){
   $("btnS").disabled=true;
   $("outS").innerHTML='<div class="load">Stahuji data z Yahoo screeneru…</div>';
   try{
-    const res=await fetch("/api/screener?type="+scrType);
-    const d=await res.json();
-    if(d.error)throw new Error(d.error);
+    const d=await fetchJson("/api/screener?type="+scrType);
     let rows="";
     d.stocks.forEach((s,i)=>{
       rows+=`<div class="item">
@@ -162,9 +173,7 @@ async function runStock(){
   $("btnA").disabled=true;
   $("outA").innerHTML='<div class="load">Stahuji živá data z Yahoo Finance…</div>';
   try{
-    const res=await fetch("/api/analyze?tickers="+encodeURIComponent(q));
-    const d=await res.json();
-    if(d.error)throw new Error(d.error);
+    const d=await fetchJson("/api/analyze?tickers="+encodeURIComponent(q));
     render(d);
   }catch(e){
     $("outA").innerHTML='<div class="err">'+e.message+'</div>';
@@ -188,10 +197,28 @@ function render(d){
     cheaper<=total*0.25?["NADHODNOCENÁ","#331516","#D2504B","var(--red)"]:
     ["FÉROVÁ CENA","#2E2A14","#C9A227","var(--yellow)"]):["MÁLO DAT","#2E2A14","#C9A227","var(--yellow)"];
 
-  let sumTxt=ps.length?`Vůči ${d.autoPeers?"automaticky vybraným konkurentům ze stejného sektoru":"zadané konkurenci"} je <b>${m.ticker}</b> levnější v ${cheaper} z ${total} valuačních metrik. `:"Přidej konkurenty pro srovnání (oddělené čárkou). ";
-  if(m.pe==null)sumTxt+="Firma je ztrátová (P/E chybí) — rozhoduje P/S a růst tržeb. ";
-  if(m.peg!=null)sumTxt+=m.peg<1?"PEG pod 1 naznačuje, že růst není plně zaceněn. ":m.peg>2?"PEG nad 2 znamená, že platíš hodně za očekávaný růst. ":"";
-  if(m.divYield)sumTxt+=`Dividendový výnos ${fmt(m.divYield)} %.`;
+  // druhý pohled: valuace vůči vlastnímu růstu (PEG / forward P/E vs růst zisku)
+  let growthView="";
+  if(m.isReit){
+    growthView="Pozn.: jde o REIT — P/E a PEG u něj klamou, sleduj hlavně P/B, dividendu a payout ratio. ";
+  } else if(m.peg!=null){
+    growthView=m.peg<1?"Vůči vlastnímu růstu vypadá levně (PEG pod 1 — růst není plně zaceněn). ":
+      m.peg<=2?"Vůči vlastnímu růstu je oceněná férově (PEG 1–2). ":
+      "Vůči vlastnímu růstu je dražší (PEG nad 2 — platíš prémii za růst). ";
+  } else if(m.fwdPe&&m.pe&&m.fwdPe<m.pe){
+    growthView="Forward P/E je nižší než P/E — analytici čekají růst zisku, což valuaci zlevňuje do budoucna. ";
+  }
+
+  let sumTxt="";
+  if(ps.length){
+    sumTxt=`<b>Dva pohledy na valuaci:</b> Vůči ${d.autoPeers?"automaticky vybraným konkurentům ze stejného sektoru":"zadané konkurenci"} je <b>${m.ticker}</b> levnější v ${cheaper} z ${total} metrik → badge výše ukazuje „${verdict[0]}". ${growthView}`;
+    sumTxt+="Akcie tak může být levná na svůj růst, ale zároveň dražší než konkrétní konkurenti — obojí platí současně, jen se dívá z jiného úhlu. ";
+  } else {
+    sumTxt="Přidej konkurenty pro srovnání (oddělené čárkou). "+growthView;
+  }
+  if(m.pe==null&&!m.isReit)sumTxt+="Firma je ztrátová (P/E chybí) — rozhoduje P/S a růst tržeb. ";
+  if(m.upside!=null)sumTxt+=`Průměrný cíl analytiků ${fmt(m.targetMean)} ${m.currency} = ${m.upside>0?"+":""}${fmt(m.upside)} % vůči ceně. `;
+  if(m.divYield)sumTxt+=`Dividendový výnos ${fmt(m.divYield)} %${m.payoutRatio!=null?`, payout ${fmt(m.payoutRatio)} %`:""}.`;
 
   let peerRows="";
   for(const p of ps)peerRows+=`<tr><td>${p.ticker}<span class="n">${p.name}</span></td>
@@ -218,11 +245,22 @@ function render(d){
     ${metricCard("PEG",m.peg,"",pa.peg)}
     ${metricCard("P/B",m.pb,"",pa.pb)}
     ${metricCard("P/S",m.ps,"",pa.ps)}
+    ${metricCard("EV/EBITDA",m.evEbitda,"")}
     ${metricCard("ROE",m.roe," %")}
     ${metricCard("Čistá marže",m.netMargin," %")}
     ${metricCard("Růst tržeb",m.revGrowth," %")}
-    ${metricCard("Dividenda",m.divYield," %")}
+    ${metricCard("Current ratio",m.currentRatio,"")}
     ${metricCard("Dluh/Equity",m.debtEq,"")}
+    ${metricCard("Free cash flow",m.freeCashflow!=null?cap(m.freeCashflow):null,"")}
+  </div>
+  <h3>ANALYTICI &amp; DIVIDENDA</h3>
+  <div class="grid">
+    ${metricCard("Cíl analytiků",m.targetMean,"")}
+    ${metricCard("Potenciál",m.upside," %")}
+    ${metricCard("Doporučení",m.recommendation?m.recommendation.toUpperCase():null,"")}
+    ${metricCard("Dividenda",m.divYield," %")}
+    ${metricCard("Payout ratio",m.payoutRatio," %")}
+    ${metricCard("5letý ⌀ div.",m.fiveYearAvgDivYield," %")}
   </div>
   ${ps.length?`<h3>SROVNÁNÍ S KONKURENCÍ</h3>
   <div class="tblwrap"><table>
