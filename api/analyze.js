@@ -8,36 +8,50 @@ const pct = (v) => (typeof v === "number" ? Math.round(v * 10000) / 100 : null);
 async function getMetrics(ticker) {
   const q = await yahooFinance.quoteSummary(
     ticker,
-    { modules: ["price", "summaryDetail", "defaultKeyStatistics", "financialData", "assetProfile"] },
+    { modules: ["price", "summaryDetail", "defaultKeyStatistics", "financialData", "assetProfile", "summaryProfile"] },
     { validateResult: false }
   );
   const p = q.price || {};
   const sd = q.summaryDetail || {};
   const ks = q.defaultKeyStatistics || {};
   const fd = q.financialData || {};
+  const ap = q.assetProfile || q.summaryProfile || {};
 
-  let peg = r(ks.pegRatio);
-  const fwdPe = r(ks.forwardPE ?? sd.forwardPE);
-  const growth = fd.earningsGrowth;
+  const pick = (...vals) => {
+    for (const v of vals) if (v !== null && v !== undefined && v !== "") return v;
+    return null;
+  };
+
+  const pe = r(pick(sd.trailingPE, ks.trailingPE, p.trailingPE,
+    fd.currentPrice && fd.epsTrailingTwelveMonths ? fd.currentPrice / fd.epsTrailingTwelveMonths : null));
+  const fwdPe = r(pick(ks.forwardPE, sd.forwardPE, p.forwardPE));
+  const price = r(pick(fd.currentPrice, p.regularMarketPrice, sd.previousClose));
+  const growth = pick(fd.earningsGrowth, ks.earningsQuarterlyGrowth);
+
+  let peg = r(pick(ks.pegRatio, ks.trailingPegRatio));
   if (peg == null && fwdPe && growth > 0) peg = r(fwdPe / (growth * 100));
 
   return {
     ticker: ticker.toUpperCase(),
-    name: p.shortName || ticker.toUpperCase(),
-    sector: (q.assetProfile && q.assetProfile.sector) || "—",
-    price: r(p.regularMarketPrice),
-    currency: p.currency || "",
-    marketCap: p.marketCap ?? sd.marketCap ?? null,
-    pe: r(sd.trailingPE),
+    name: pick(p.longName, p.shortName, ticker.toUpperCase()),
+    sector: pick(ap.sector, "—"),
+    price,
+    currency: pick(p.currency, fd.financialCurrency, ""),
+    marketCap: pick(p.marketCap, sd.marketCap),
+    pe,
     fwdPe,
     peg,
-    pb: r(ks.priceToBook),
-    ps: r(sd.priceToSalesTrailing12Months),
-    roe: pct(fd.returnOnEquity),
-    netMargin: pct(fd.profitMargins),
-    revGrowth: pct(fd.revenueGrowth),
-    divYield: sd.dividendYield != null ? pct(sd.dividendYield) : null,
-    debtEq: r(fd.debtToEquity),
+    pb: r(pick(ks.priceToBook, sd.priceToBook)),
+    ps: r(pick(sd.priceToSalesTrailing12Months, ks.priceToSalesTrailing12Months)),
+    roe: pct(pick(fd.returnOnEquity, ks.returnOnEquity)),
+    netMargin: pct(pick(fd.profitMargins, ks.profitMargins)),
+    revGrowth: pct(pick(fd.revenueGrowth, sd.revenueGrowth)),
+    divYield: (() => {
+      const dy = pick(sd.dividendYield, sd.trailingAnnualDividendYield, ks.dividendYield);
+      if (dy == null) return null;
+      return dy > 1 ? r(dy) : pct(dy);
+    })(),
+    debtEq: r(pick(fd.debtToEquity, ks.debtToEquity)),
   };
 }
 
@@ -72,4 +86,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `Serverová chyba: ${e.message || String(e)}` });
   }
 }
-
