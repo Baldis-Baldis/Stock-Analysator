@@ -80,8 +80,26 @@ export default async function handler(req, res) {
     if (!results.length) {
       return res.status(404).json({ error: errors.join("; ") || "Žádná data." });
     }
+
+    let autoPeers = false;
+    if (results.length === 1) {
+      try {
+        const rec = await yahooFinance.recommendationsBySymbol(results[0].ticker);
+        const symbols = (rec?.recommendedSymbols || [])
+          .map((s) => s.symbol)
+          .filter((s) => s && s !== results[0].ticker)
+          .slice(0, 4);
+        for (const sym of symbols) {
+          try {
+            results.push(await getMetrics(sym));
+          } catch { /* konkurenta přeskoč */ }
+        }
+        if (results.length > 1) autoPeers = true;
+      } catch { /* nevadí */ }
+    }
+
     res.setHeader("Cache-Control", "s-maxage=300");
-    return res.status(200).json({ main: results[0], peers: results.slice(1), errors });
+    return res.status(200).json({ main: results[0], peers: results.slice(1), errors, autoPeers });
   } catch (e) {
     return res.status(500).json({ error: `Serverová chyba: ${e.message || String(e)}` });
   }
